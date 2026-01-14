@@ -49,8 +49,11 @@ if [ -n "$Resolved_Arch" ]; then
 	try_subconverter_bin "${Subconverter_Dir}/${Resolved_Arch}/subconverter" && return 0
 fi
 
-if [ "${SUBCONVERTER_AUTO_DOWNLOAD:-false}" = "true" ] && [ -n "$Resolved_Arch" ]; then
-	Download_Template="${SUBCONVERTER_DOWNLOAD_URL_TEMPLATE:-}"
+Default_Template="https://github.com/tindy2013/subconverter/releases/latest/download/subconverter_{arch}.tar.gz"
+Auto_Download="${SUBCONVERTER_AUTO_DOWNLOAD:-auto}"
+
+if [ "$Auto_Download" != "false" ] && [ -n "$Resolved_Arch" ]; then
+	Download_Template="${SUBCONVERTER_DOWNLOAD_URL_TEMPLATE:-$Default_Template}"
 	if [ -z "$Download_Template" ]; then
 		echo -e "\033[33m[WARN] 未设置 SUBCONVERTER_DOWNLOAD_URL_TEMPLATE，跳过 subconverter 自动下载\033[0m"
 		return 0
@@ -79,4 +82,5 @@ if [ "${SUBCONVERTER_AUTO_DOWNLOAD:-false}" = "true" ] && [ -n "$Resolved_Arch" 
 			try_subconverter_bin "${Subconverter_Dir}/subconverter-${Resolved_Arch}" && return 0
 		fi
 	fi
+	echo -e "\033[33m[WARN] subconverter 自动下载失败，跳过订阅转换\033[0m"
 fi

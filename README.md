@@ -10,7 +10,7 @@
 
 # 使用须知
 
-- 运行本项目建议使用root用户，或者使用 sudo 提权。
+- 支持普通用户运行，涉及 systemd 安装/端口转发等系统级操作时需要 root 或 sudo。
 - 使用过程中如遇到问题，请优先查已有的 [issues](https://github.com/wanhebin/clash-for-linux/issues)。
 - 在进行issues提交前，请替换提交内容中是敏感信息（例如：订阅地址）。
 - 本项目是基于 [clash](https://github.com/Dreamacro/clash) 、[yacd](https://github.com/haishanh/yacd) 进行的配置整合，关于clash、yacd的详细配置请去原项目查看。
@@ -20,7 +20,7 @@
 - 默认开启 TLS 证书校验，若确需跳过校验请在`.env`中设置`ALLOW_INSECURE_TLS=true`（不推荐）。
 - 如从旧版本升级，若存在 `/etc/profile.d/clash.sh` 请按需清理或改用新的 `/etc/profile.d/clash-for-linux.sh`。
 - 当前在RHEL系列和Debian系列Linux系统中测试过，其他系列可能需要适当修改脚本。
-- 支持 x86_64/aarch64 平台
+- 内置 Clash 二进制支持 x86_64/aarch64/armv7，其它架构可自行放置二进制并通过 `CLASH_BIN` 指定路径。
 
 > **注意**：当你在使用此项目时，遇到任何无法独自解决的问题请优先前往 [Issues](https://github.com/wanhebin/clash-for-linux/issues) 寻找解决方法。由于空闲时间有限，后续将不再对Issues中 “已经解答”、“已有解决方案” 的问题进行重复性的回答。
 
@@ -44,6 +44,7 @@ $ vim .env
 ```
 
 > **注意：** `.env` 文件中的变量 `CLASH_SECRET` 为自定义 Clash Secret，值为空时，脚本将自动生成随机字符串。
+> 如需使用其它架构，请将对应 Clash 二进制放入 `bin/` 并在 `.env` 中设置 `CLASH_BIN`，或命名为 `clash-linux-<arch>`（如 `clash-linux-riscv64`）。
 
 <br>
 
@@ -181,7 +182,13 @@ $ sudo systemctl stop clash-for-linux.service
 > 如需自定义运行用户，可在执行脚本前设置 `CLASH_SERVICE_USER`（可选 `CLASH_SERVICE_GROUP`）。
 > 默认使用 `clash` 用户运行服务，systemd 环境文件输出到 `temp/clash-for-linux.sh`。
 
-如果需要手动安装，可参考 `systemd/clash-for-linux.service` 模板并替换安装路径。
+如果需要手动安装，可参考 `systemd/clash-for-linux.service` 模板，并在 `/etc/default/clash-for-linux` 中设置 `CLASH_HOME`：
+
+```bash
+sudo cp systemd/clash-for-linux.env /etc/default/clash-for-linux
+sudo vim /etc/default/clash-for-linux
+```
+也可以创建 `/etc/default/clash-for-linux` 并设置 `CLASH_HOME`，模板会自动读取该路径。
 
 
 <br>
@@ -200,10 +207,11 @@ $ sudo systemctl stop clash-for-linux.service
 - `linux-arm64`
 - `linux-armv7`
 
-你也可以设置：
+自动下载默认使用 `https://github.com/tindy2013/subconverter/releases/latest/download/subconverter_{arch}.tar.gz`，
+如果需要自定义来源或关闭下载，可以设置：
 
 - `SUBCONVERTER_PATH`：指定自定义 `subconverter` 可执行文件路径。
-- `SUBCONVERTER_AUTO_DOWNLOAD=true`：启用自动下载（需 `curl`/`wget`）。
+- `SUBCONVERTER_AUTO_DOWNLOAD=false`：关闭自动下载（默认会尝试自动下载，需 `curl`/`wget`）。
 - `SUBCONVERTER_DOWNLOAD_URL_TEMPLATE`：下载模板，使用 `{arch}` 占位符，如：
 
 ```bash

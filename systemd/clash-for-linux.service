@@ -4,15 +4,16 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/clash-for-linux
-ExecStart=/bin/bash /opt/clash-for-linux/start.sh
-ExecStop=/bin/bash /opt/clash-for-linux/shutdown.sh
+EnvironmentFile=-/etc/default/clash-for-linux
+Environment=CLASH_HOME=/opt/clash-for-linux
+ExecStart=/bin/bash -c 'exec /bin/bash "${CLASH_HOME}/start.sh"'
+ExecStop=/bin/bash -c 'exec /bin/bash "${CLASH_HOME}/shutdown.sh"'
 Restart=on-failure
 RestartSec=5
 User=clash
 Group=clash
-PIDFile=/opt/clash-for-linux/temp/clash.pid
-Environment=CLASH_ENV_FILE=/opt/clash-for-linux/temp/clash-for-linux.sh
+PIDFile=%E{CLASH_HOME}/temp/clash.pid
+Environment=CLASH_ENV_FILE=%E{CLASH_HOME}/temp/clash-for-linux.sh
 
 [Install]
 WantedBy=multi-user.target

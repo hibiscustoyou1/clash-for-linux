@@ -25,7 +25,7 @@ fi
 Conf_Dir="$Server_Dir/conf"
 Temp_Dir="$Server_Dir/temp"
 Log_Dir="$Server_Dir/logs"
-PID_FILE="$Temp_Dir/clash.pid"
+PID_FILE="${CLASH_PID_FILE:-$Temp_Dir/clash.pid}"
 
 # 将 CLASH_URL 变量的值赋给 URL 变量，并检查 CLASH_URL 是否为空
 URL=${CLASH_URL:?Error: CLASH_URL variable is not set or empty}
@@ -223,38 +223,76 @@ fi
 sed -r -i '/^secret: /s@(secret: ).*@\1'${Secret}'@g' $Conf_Dir/config.yaml
 
 
+resolve_clash_arch() {
+	local raw_arch="$1"
+	case "$raw_arch" in
+		x86_64|amd64)
+			echo "linux-amd64"
+			;;
+		aarch64|arm64)
+			echo "linux-arm64"
+			;;
+		armv7*|armv7l)
+			echo "linux-armv7"
+			;;
+		*)
+			echo "linux-${raw_arch}"
+			;;
+	esac
+}
+
+resolve_clash_bin() {
+	local detected_arch="${CpuArch:-$(uname -m 2>/dev/null)}"
+	local resolved_arch
+	local candidates=()
+
+	if [ -n "$CLASH_BIN" ]; then
+		if [ -x "$CLASH_BIN" ]; then
+			echo "$CLASH_BIN"
+			return 0
+		fi
+		echo -e "\033[31m[ERROR] CLASH_BIN 指定的文件不可执行: $CLASH_BIN\033[0m"
+		return 1
+	fi
+
+	resolved_arch=$(resolve_clash_arch "$detected_arch")
+	if [ -n "$resolved_arch" ]; then
+		candidates+=("$Server_Dir/bin/clash-${resolved_arch}")
+	fi
+	candidates+=(
+		"$Server_Dir/bin/clash-${detected_arch}"
+		"$Server_Dir/bin/clash"
+	)
+
+	for candidate in "${candidates[@]}"; do
+		if [ -x "$candidate" ]; then
+			echo "$candidate"
+			return 0
+		fi
+	done
+
+	echo -e "\033[31m\n[ERROR] 未找到可用的 Clash 二进制。\033[0m"
+	echo -e "请将对应架构的二进制放入: $Server_Dir/bin/"
+	echo -e "可用命名示例: clash-${resolved_arch} 或 clash-${detected_arch}"
+	echo -e "或通过 CLASH_BIN 指定自定义路径。"
+	return 1
+}
+
 ## 启动Clash服务
 echo -e '\n正在启动Clash服务...'
 Text5="服务启动成功！"
 Text6="服务启动失败！"
-if [[ $CpuArch =~ "x86_64" || $CpuArch =~ "amd64"  ]]; then
-	nohup $Server_Dir/bin/clash-linux-amd64 -d $Conf_Dir &> $Log_Dir/clash.log &
+Clash_Bin=$(resolve_clash_bin)
+ReturnStatus=$?
+if [ $ReturnStatus -eq 0 ]; then
+	nohup "$Clash_Bin" -d "$Conf_Dir" &> "$Log_Dir/clash.log" &
 	PID=$!
 	ReturnStatus=$?
 	if [ $ReturnStatus -eq 0 ]; then
 		echo "$PID" > "$PID_FILE"
 	fi
-	if_success $Text5 $Text6 $ReturnStatus
-elif [[ $CpuArch =~ "aarch64" ||  $CpuArch =~ "arm64" ]]; then
-	nohup $Server_Dir/bin/clash-linux-arm64 -d $Conf_Dir &> $Log_Dir/clash.log &
-	PID=$!
-	ReturnStatus=$?
-	if [ $ReturnStatus -eq 0 ]; then
-		echo "$PID" > "$PID_FILE"
-	fi
-	if_success $Text5 $Text6 $ReturnStatus
-elif [[ $CpuArch =~ "armv7" ]]; then
-	nohup $Server_Dir/bin/clash-linux-armv7 -d $Conf_Dir &> $Log_Dir/clash.log &
-	PID=$!
-	ReturnStatus=$?
-	if [ $ReturnStatus -eq 0 ]; then
-		echo "$PID" > "$PID_FILE"
-	fi
-	if_success $Text5 $Text6 $ReturnStatus
-else
-	echo -e "\033[31m\n[ERROR] Unsupported CPU Architecture！\033[0m"
-	exit 1
 fi
+if_success $Text5 $Text6 $ReturnStatus
 
 # Output Dashboard access address and Secret
 echo ''
