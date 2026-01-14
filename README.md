@@ -48,267 +48,148 @@
  最近更新：**2026-01-13**
 <br>
 
-# 使用教程
+使用教程
 
-## 下载项目
+推荐路径优先，一键安装即可满足 90% 使用场景。
+手动模式适合调试、二次开发或自定义部署。
 
-下载项目
-
-```bash
-git clone https://github.com/wnlen/clash-for-linux.git
-```
-
-进入到项目目录，编辑`.env`文件，修改变量`CLASH_URL`的值。
-
-```bash
+🚀 一键安装（推荐）
+git clone --branch master --depth 1 https://github.com/wnlen/clash-for-linux.git
 cd clash-for-linux
+sudo bash install.sh
+
+
+安装脚本将自动完成：
+
+识别系统架构并下载对应 Clash 内核
+
+创建 systemd 服务（默认启用并启动）
+
+检测并规避端口冲突
+
+安装 clashctl 到 /usr/local/bin
+
+创建低权限运行用户（默认 clash）
+
+可选安装参数
+CLASH_INSTALL_DIR=/opt/clash-for-linux
+CLASH_SERVICE_USER=clash
+CLASH_ENABLE_SERVICE=true
+CLASH_START_SERVICE=true
+CLASH_AUTO_DOWNLOAD=auto
+CLASH_DOWNLOAD_URL_TEMPLATE=https://github.com/Dreamacro/clash/releases/latest/download/clash-{arch}.gz
+
+⚙️ 配置订阅（必须）
+
+编辑 .env 文件，设置订阅地址：
+
 vim .env
-```
 
-> **注意：** `.env` 文件中的变量 `CLASH_SECRET` 为自定义 Clash Secret，值为空时，脚本将自动生成随机字符串。
-> 如需使用其它架构，请将对应 Clash 二进制放入 `bin/` 并在 `.env` 中设置 `CLASH_BIN`，或命名为 `clash-linux-<arch>`（如 `clash-linux-riscv64`）。
-> 端口支持设置为 `auto`，脚本会自动检测冲突并随机分配可用端口。
+CLASH_URL=https://example.com/your-subscribe
 
-<br>
 
-## 启动程序
+说明：
 
-直接运行脚本文件`start.sh`
+CLASH_SECRET 为空时将自动生成
 
-- 进入项目目录
+端口支持设置为 auto，自动检测并分配
 
-```bash
-cd clash-for-linux
-```
+其它架构可通过 CLASH_BIN 指定二进制路径，或命名为 clash-linux-<arch>
 
-- 运行启动脚本
+▶️ 启动与代理设置
+启动服务（systemd 安装后通常已自动启动）
+clashctl status
 
-```bash
-sudo bash start.sh
-
-正在检测订阅地址...
-Clash订阅地址可访问！                                      [  OK  ]
-
-正在下载Clash配置文件...
-配置文件config.yaml下载成功！                              [  OK  ]
-
-正在启动Clash服务...
-服务启动成功！                                             [  OK  ]
-
-Clash Dashboard 访问地址：http://<ip>:9090/ui
-Secret：xxxxxxxxxxxxx
-
-请执行以下命令加载环境变量: source /etc/profile.d/clash-for-linux.sh
-
-请执行以下命令开启系统代理: proxy_on
-
-若要临时关闭系统代理，请执行: proxy_off
-
-```
-
-```bash
+加载环境变量并开启代理
 source /etc/profile.d/clash-for-linux.sh
 proxy_on
-```
 
-<br>
 
-## clashctl 命令
+关闭代理：
 
-统一管理入口，支持启动/停止/重启/状态/更新/修改订阅：
+proxy_off
 
-```bash
-sudo ./clashctl status
-sudo ./clashctl start
-sudo ./clashctl restart
-sudo ./clashctl update
-sudo ./clashctl set-url "https://example.com/your-subscribe"
-```
+🧰 clashctl 管理命令
 
-订阅管理（多订阅）：
+统一管理入口（推荐使用）：
 
-```bash
-sudo ./clashctl sub add office "https://example.com/office" "User-Agent: ClashforWindows/0.20.39"
-sudo ./clashctl sub add personal "https://example.com/personal"
-sudo ./clashctl sub list
-sudo ./clashctl sub use personal
-sudo ./clashctl sub update
-sudo ./clashctl sub log
-```
+clashctl status
+clashctl start
+clashctl restart
+clashctl update
+clashctl set-url "https://example.com/your-subscribe"
 
-安装脚本会将 `clashctl` 安装到 `/usr/local/bin/clashctl`，安装后可直接使用：
+多订阅管理
+clashctl sub add office "https://example.com/office"
+clashctl sub add personal "https://example.com/personal"
+clashctl sub list
+clashctl sub use personal
+clashctl sub update
+clashctl sub log
 
-```bash
-sudo clashctl status
-```
+🔄 配置修改与更新
+修改 Clash 配置并重启
+vim conf/config.yaml
+clashctl restart
 
-<br>
 
-## 一键安装/卸载
+restart 不会更新订阅
 
-🚀 **一键安装（当前项目）**
+更新订阅
+clashctl update
 
-当前项目支持一键安装，在终端中执行以下命令即可完成安装：
 
-```bash
-git clone --branch master --depth 1 https://github.com/wnlen/clash-for-linux.git && cd clash-for-linux && bash install.sh
-```
+或指定订阅：
 
-脚本会自动识别安装路径、创建低权限用户、检测端口冲突，并根据架构自动下载 Clash 内核（可通过 `CLASH_DOWNLOAD_URL_TEMPLATE` 自定义下载地址）。
+clashctl sub update personal
 
-```bash
-sudo bash install.sh
-```
+🧩 Mixin 配置（可选）
 
-如需调整安装路径或服务行为，可使用以下环境变量：
+用于追加或覆盖 Clash 配置。
 
-- `CLASH_INSTALL_DIR`：默认 `/opt/clash-for-linux`
-- `CLASH_SERVICE_USER` / `CLASH_SERVICE_GROUP`：systemd 运行用户/组
-- `CLASH_ENABLE_SERVICE`：是否 `systemctl enable`（默认 `true`）
-- `CLASH_START_SERVICE`：是否 `systemctl start`（默认 `true`）
-- `CLASH_AUTO_DOWNLOAD`：是否自动下载 Clash 内核（默认 `auto`）
-- `CLASH_DOWNLOAD_URL_TEMPLATE`：自定义下载模板（默认 `https://github.com/Dreamacro/clash/releases/latest/download/clash-{arch}.gz`）
+默认读取：conf/mixin.d/*.yaml（按文件名排序）
 
-卸载：
+也可在 .env 中指定：
 
-```bash
-sudo bash uninstall.sh
-```
-
-- 检查服务端口
-
-```bash
-netstat -tln | grep -E '9090|789.'
-tcp        0      0 127.0.0.1:9090          0.0.0.0:*               LISTEN     
-tcp6       0      0 :::7890                 :::*                    LISTEN     
-tcp6       0      0 :::7891                 :::*                    LISTEN     
-tcp6       0      0 :::7892                 :::*                    LISTEN
-```
-
-- 检查环境变量
-
-```bash
-env | grep -E 'http_proxy|https_proxy'
-http_proxy=http://127.0.0.1:7890
-https_proxy=http://127.0.0.1:7890
-```
-
-以上步鄹如果正常，说明服务clash程序启动成功，现在就可以体验高速下载github资源了。
-
-<br>
-
-## 重启程序
-
-如果需要对Clash配置进行修改，请修改 `conf/config.yaml` 文件。然后运行 `restart.sh` 脚本进行重启。
-
-> **注意：**
-> 重启脚本 `restart.sh` 不会更新订阅信息。
-
-如需更新订阅并重启，可执行：
-
-```bash
-sudo bash restart.sh --update
-```
-
-## 更新订阅
-
-如只需更新订阅配置但不重启服务，可执行：
-
-```bash
-sudo bash update.sh
-```
-
-如需通过订阅管理更新，可执行：
-
-```bash
-sudo clashctl sub update personal
-```
-
-<br>
-
-## Mixin 配置
-
-可通过 mixin 追加或覆盖 Clash 配置。默认读取 `conf/mixin.d` 下的 `.yaml/.yml` 文件（按文件名排序）。也可以通过 `.env` 设置指定路径：
-
-```bash
-export CLASH_MIXIN_PATHS='conf/mixin.d/base.yaml,conf/mixin.d/rules.yaml'
 export CLASH_MIXIN_DIR='conf/mixin.d'
-```
+export CLASH_MIXIN_PATHS='conf/mixin.d/base.yaml,conf/mixin.d/rules.yaml'
 
-<br>
+🌐 Tun 模式（可选）
 
-## Tun 模式
+需 Clash Meta / Premium 支持，在 .env 中配置：
 
-Tun 模式需要 Clash Premium/Meta 支持。可在 `.env` 中启用并配置：
-
-```bash
 export CLASH_TUN_ENABLE=true
 export CLASH_TUN_STACK=system
 export CLASH_TUN_AUTO_ROUTE=true
 export CLASH_TUN_AUTO_REDIRECT=false
 export CLASH_TUN_STRICT_ROUTE=false
 export CLASH_TUN_DNS_HIJACK='any:53'
-```
 
-<br>
-
-## 停止程序
-
-- 进入项目目录
-
-```bash
-cd clash-for-linux
-```
-
-- 关闭服务
-
-```bash
-sudo bash shutdown.sh
-
-服务关闭成功，请执行以下命令关闭系统代理：proxy_off
-
-```
-
-```bash
+⛔ 停止服务
+clashctl stop
 proxy_off
-```
 
-然后检查程序端口、进程以及环境变量`http_proxy|https_proxy`，若都没则说明服务正常关闭。
+🔍 状态检查（可选）
 
-<br>
+端口：
 
-## systemd 服务
+netstat -tln | grep -E '9090|789.'
 
-推荐使用自动安装脚本生成 systemd 单元（自动识别安装路径、创建低权限用户并修正目录权限）：
 
-```bash
-sudo bash scripts/install_systemd.sh
-```
+代理环境变量：
 
-启用并启动服务：
+env | grep -E 'http_proxy|https_proxy'
 
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now clash-for-linux.service
-```
+🧹 卸载
+sudo bash uninstall.sh
 
-停止服务：
+📝 说明（简化保留）
 
-```bash
-sudo systemctl stop clash-for-linux.service
-```
+管理面板默认绑定 127.0.0.1:9090
 
-> 如需自定义运行用户，可在执行脚本前设置 `CLASH_SERVICE_USER`（可选 `CLASH_SERVICE_GROUP`）。
-> 默认使用 `clash` 用户运行服务，systemd 环境文件输出到 `temp/clash-for-linux.sh`。
+如需对外访问，请自行配置并确保 CLASH_SECRET 足够复杂
 
-如果需要手动安装，可参考 `systemd/clash-for-linux.service` 模板，并在 `/etc/default/clash-for-linux` 中设置 `CLASH_HOME`：
-
-```bash
-sudo cp systemd/clash-for-linux.env /etc/default/clash-for-linux
-sudo vim /etc/default/clash-for-linux
-```
-也可以创建 `/etc/default/clash-for-linux` 并设置 `CLASH_HOME`，模板会自动读取该路径。
-
+默认启用 TLS 校验，不推荐关闭
 
 <br>
 
