@@ -260,7 +260,7 @@ if [ -n "$SECRET_VAL" ]; then
 else
   echo ""
   echo -e "🌐 Dashboard：http://${api_host}:${api_port}/ui"
-  echo "🔐 Secret：未读取到（服务首次启动后生成），可用以下命令查看："
+  echo "🔐 Secret：未配置（当前为无鉴权模式，仅限本机访问），可用以下命令查看："
   echo "   sudo awk -F': *' '/^secret:/{print \$2; exit}' $CONF_FILE"
 fi
 
