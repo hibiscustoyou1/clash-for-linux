@@ -1,30 +1,35 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+############################################
+# Clash for Linux - start.sh (Full Version)
+############################################
 
 # 加载系统函数库(Only for RHEL Linux)
-# [ -f /etc/init.d/functions ] && source /etc/init.d/functions
+[ -f /etc/init.d/functions ] && source /etc/init.d/functions
 
 #################### 脚本初始化任务 ####################
 
 # 获取脚本工作目录绝对路径
-export Server_Dir=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
+export Server_Dir
+Server_Dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 加载.env变量文件
-source $Server_Dir/.env
+source "$Server_Dir/.env"
 
 # 给二进制启动程序、脚本等添加可执行权限
-chmod +x $Server_Dir/bin/* 2>/dev/null
-chmod +x $Server_Dir/scripts/* 2>/dev/null
+chmod +x "$Server_Dir/bin/"* 2>/dev/null || true
+chmod +x "$Server_Dir/scripts/"* 2>/dev/null || true
 if [ -f "$Server_Dir/tools/subconverter/subconverter" ]; then
-	chmod +x $Server_Dir/tools/subconverter/subconverter 2>/dev/null
+  chmod +x "$Server_Dir/tools/subconverter/subconverter" 2>/dev/null || true
 fi
-
-
 
 #################### 变量设置 ####################
 
 Conf_Dir="$Server_Dir/conf"
 Temp_Dir="$Server_Dir/temp"
 Log_Dir="$Server_Dir/logs"
+
 PID_FILE="${CLASH_PID_FILE:-$Temp_Dir/clash.pid}"
 
 # 将 CLASH_URL 变量的值赋给 URL 变量，并检查 CLASH_URL 是否为空
@@ -39,85 +44,78 @@ CLASH_SOCKS_PORT=${CLASH_SOCKS_PORT:-7891}
 CLASH_REDIR_PORT=${CLASH_REDIR_PORT:-7892}
 CLASH_LISTEN_IP=${CLASH_LISTEN_IP:-0.0.0.0}
 CLASH_ALLOW_LAN=${CLASH_ALLOW_LAN:-false}
+
 EXTERNAL_CONTROLLER_ENABLED=${EXTERNAL_CONTROLLER_ENABLED:-true}
 EXTERNAL_CONTROLLER=${EXTERNAL_CONTROLLER:-127.0.0.1:9090}
+
 ALLOW_INSECURE_TLS=${ALLOW_INSECURE_TLS:-false}
 
+# 端口与配置工具
 source "$Server_Dir/scripts/port_utils.sh"
-CLASH_HTTP_PORT=$(resolve_port_value "HTTP" "$CLASH_HTTP_PORT")
-CLASH_SOCKS_PORT=$(resolve_port_value "SOCKS" "$CLASH_SOCKS_PORT")
-CLASH_REDIR_PORT=$(resolve_port_value "REDIR" "$CLASH_REDIR_PORT")
-EXTERNAL_CONTROLLER=$(resolve_host_port "External Controller" "$EXTERNAL_CONTROLLER" "0.0.0.0")
+CLASH_HTTP_PORT="$(resolve_port_value "HTTP" "$CLASH_HTTP_PORT")"
+CLASH_SOCKS_PORT="$(resolve_port_value "SOCKS" "$CLASH_SOCKS_PORT")"
+CLASH_REDIR_PORT="$(resolve_port_value "REDIR" "$CLASH_REDIR_PORT")"
+EXTERNAL_CONTROLLER="$(resolve_host_port "External Controller" "$EXTERNAL_CONTROLLER" "0.0.0.0")"
 
 source "$Server_Dir/scripts/config_utils.sh"
-
-
 
 #################### 函数定义 ####################
 
 # 自定义action函数，实现通用action功能
 success() {
-	echo -en "\\033[60G[\\033[1;32m  OK  \\033[0;39m]\r"
-	return 0
+  echo -en "\033[60G[\033[1;32m OK \033[0;39m]\r"
+  return 0
 }
 
 failure() {
-	local rc=$?
-	echo -en "\\033[60G[\\033[1;31mFAILED\\033[0;39m]\r"
-	[ -x /bin/plymouth ] && /bin/plymouth --details
-	return $rc
+  local rc=$?
+  echo -en "\033[60G[\033[1;31mFAILED\033[0;39m]\r"
+  [ -x /bin/plymouth ] && /bin/plymouth --details
+  return $rc
 }
 
 action() {
-	local STRING rc
-
-	STRING=$1
-	echo -n "$STRING "
-	shift
-	"$@" && success $"$STRING" || failure $"$STRING"
-	rc=$?
-	echo
-	return $rc
+  local STRING rc
+  STRING=$1
+  echo -n "$STRING "
+  shift
+  "$@" && success $"$STRING" || failure $"$STRING"
+  rc=$?
+  echo
+  return $rc
 }
 
 # 判断命令是否正常执行 函数
 if_success() {
-	local ReturnStatus=$3
-	if [ $ReturnStatus -eq 0 ]; then
-		action "$1" /bin/true
-	else
-		action "$2" /bin/false
-		exit 1
-	fi
+  local ReturnStatus=$3
+  if [ "$ReturnStatus" -eq 0 ]; then
+    action "$1" /bin/true
+  else
+    action "$2" /bin/false
+    exit 1
+  fi
 }
-
-
 
 #################### 任务执行 ####################
 
+mkdir -p "$Conf_Dir" "$Temp_Dir" "$Log_Dir"
+
 ## 获取CPU架构信息
-# Source the script to get CPU architecture
-source $Server_Dir/scripts/get_cpu_arch.sh
+source "$Server_Dir/scripts/get_cpu_arch.sh"
 
 # Check if we obtained CPU architecture
-if [[ -z "$CpuArch" ]]; then
-	echo "Failed to obtain CPU architecture"
-	exit 1
+if [[ -z "${CpuArch:-}" ]]; then
+  echo "Failed to obtain CPU architecture"
+  exit 1
 fi
 
 source "$Server_Dir/scripts/resolve_clash.sh"
 
-
 ## 临时取消环境变量
-unset http_proxy
-unset https_proxy
-unset no_proxy
-unset HTTP_PROXY
-unset HTTPS_PROXY
-unset NO_PROXY
-
+unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY || true
 
 ## Clash 订阅地址检测及配置文件下载
+
 # 检查url是否有效
 echo -e '\n正在检测订阅地址...'
 Text1="Clash订阅地址可访问！"
@@ -125,20 +123,22 @@ Text2="Clash订阅地址不可访问！"
 
 # 构建检测 curl 命令，添加自定义请求头
 CHECK_CMD=(curl -o /dev/null -L -sS --retry 5 -m 10 --connect-timeout 10 -w "%{http_code}")
+
 if [ "$ALLOW_INSECURE_TLS" = "true" ]; then
-	CHECK_CMD+=(-k)
-	echo -e "\033[33m[WARN] 已启用不安全的 TLS 下载（跳过证书校验）\033[0m"
+  CHECK_CMD+=(-k)
+  echo -e "\033[33m[WARN] 已启用不安全的 TLS 下载（跳过证书校验）\033[0m"
 fi
-if [ -n "$CLASH_HEADERS" ]; then
-	CHECK_CMD+=(-H "$CLASH_HEADERS")
+
+if [ -n "${CLASH_HEADERS:-}" ]; then
+  CHECK_CMD+=(-H "$CLASH_HEADERS")
 fi
+
 CHECK_CMD+=("$URL")
 
-# 检查订阅地址
-status_code=$("${CHECK_CMD[@]}")
+status_code="$("${CHECK_CMD[@]}")"
 echo "$status_code" | grep -E '^[23][0-9]{2}$' &>/dev/null
 ReturnStatus=$?
-if_success $Text1 $Text2 $ReturnStatus
+if_success "$Text1" "$Text2" "$ReturnStatus"
 
 # 拉取更新config.yml文件
 echo -e '\n正在下载Clash配置文件...'
@@ -147,163 +147,176 @@ Text4="配置文件config.yaml下载失败，退出启动！"
 
 # 构建 curl 命令，添加自定义请求头
 CURL_CMD=(curl -L -sS --retry 5 -m 10 -o "$Temp_Dir/clash.yaml")
+
 if [ "$ALLOW_INSECURE_TLS" = "true" ]; then
-	CURL_CMD+=(-k)
+  CURL_CMD+=(-k)
 fi
-if [ -n "$CLASH_HEADERS" ]; then
-	CURL_CMD+=(-H "$CLASH_HEADERS")
+
+if [ -n "${CLASH_HEADERS:-}" ]; then
+  CURL_CMD+=(-H "$CLASH_HEADERS")
 fi
+
 CURL_CMD+=("$URL")
 
 # 尝试使用curl进行下载
 "${CURL_CMD[@]}"
 ReturnStatus=$?
+
 if [ $ReturnStatus -ne 0 ]; then
-	# 如果使用curl下载失败，尝试使用wget进行下载
-	WGET_CMD=(wget -q -O "$Temp_Dir/clash.yaml")
-	if [ "$ALLOW_INSECURE_TLS" = "true" ]; then
-		WGET_CMD+=(--no-check-certificate)
-	fi
-	if [ -n "$CLASH_HEADERS" ]; then
-		WGET_CMD+=(--header="$CLASH_HEADERS")
-	fi
-	WGET_CMD+=("$URL")
-	
-	for i in {1..10}
-	do
-		"${WGET_CMD[@]}"
-		ReturnStatus=$?
-		if [ $ReturnStatus -eq 0 ]; then
-			break
-		else
-			continue
-		fi
-	done
+  # 如果使用curl下载失败，尝试使用wget进行下载
+  WGET_CMD=(wget -q -O "$Temp_Dir/clash.yaml")
+
+  if [ "$ALLOW_INSECURE_TLS" = "true" ]; then
+    WGET_CMD+=(--no-check-certificate)
+  fi
+
+  if [ -n "${CLASH_HEADERS:-}" ]; then
+    WGET_CMD+=(--header="$CLASH_HEADERS")
+  fi
+
+  WGET_CMD+=("$URL")
+
+  for i in {1..10}; do
+    "${WGET_CMD[@]}"
+    ReturnStatus=$?
+    if [ $ReturnStatus -eq 0 ]; then
+      break
+    else
+      continue
+    fi
+  done
 fi
-if_success $Text3 $Text4 $ReturnStatus
+
+if_success "$Text3" "$Text4" "$ReturnStatus"
 
 # 重命名clash配置文件
-\cp -a $Temp_Dir/clash.yaml $Temp_Dir/clash_config.yaml
-
+\cp -a "$Temp_Dir/clash.yaml" "$Temp_Dir/clash_config.yaml"
 
 ## 判断订阅内容是否符合clash配置文件标准，尝试转换（需 subconverter 可执行文件支持）
-source $Server_Dir/scripts/resolve_subconverter.sh
-if [ "$Subconverter_Ready" = "true" ]; then
-	echo -e '\n判断订阅内容是否符合clash配置文件标准:'
-	export SUBCONVERTER_BIN="$Subconverter_Bin"
-	bash $Server_Dir/scripts/clash_profile_conversion.sh
-	sleep 3
+source "$Server_Dir/scripts/resolve_subconverter.sh"
+
+if [ "${Subconverter_Ready:-false}" = "true" ]; then
+  echo -e '\n判断订阅内容是否符合clash配置文件标准:'
+  export SUBCONVERTER_BIN="$Subconverter_Bin"
+  bash "$Server_Dir/scripts/clash_profile_conversion.sh"
+  sleep 3
 else
-	echo -e "\033[33m[WARN] 未检测到可用的 subconverter，跳过订阅转换\033[0m"
+  echo -e "\033[33m[WARN] 未检测到可用的 subconverter，跳过订阅转换\033[0m"
 fi
 
-
 ## Clash 配置文件重新格式化及配置
-# 取出代理相关配置 
-#sed -n '/^proxies:/,$p' $Temp_Dir/clash.yaml > $Temp_Dir/proxy.txt
-sed -n '/^proxies:/,$p' $Temp_Dir/clash_config.yaml > $Temp_Dir/proxy.txt
+
+# 取出代理相关配置
+sed -n '/^proxies:/,$p' "$Temp_Dir/clash_config.yaml" > "$Temp_Dir/proxy.txt"
 
 # 合并形成新的config.yaml，并替换配置占位符
-cat $Temp_Dir/templete_config.yaml > $Temp_Dir/config.yaml
-cat $Temp_Dir/proxy.txt >> $Temp_Dir/config.yaml
+cat "$Temp_Dir/templete_config.yaml" > "$Temp_Dir/config.yaml"
+cat "$Temp_Dir/proxy.txt" >> "$Temp_Dir/config.yaml"
 
 # 替换配置文件中的占位符为环境变量值
-sed -i "s/CLASH_HTTP_PORT_PLACEHOLDER/${CLASH_HTTP_PORT}/g" $Temp_Dir/config.yaml
-sed -i "s/CLASH_SOCKS_PORT_PLACEHOLDER/${CLASH_SOCKS_PORT}/g" $Temp_Dir/config.yaml
-sed -i "s/CLASH_REDIR_PORT_PLACEHOLDER/${CLASH_REDIR_PORT}/g" $Temp_Dir/config.yaml
-sed -i "s/CLASH_LISTEN_IP_PLACEHOLDER/${CLASH_LISTEN_IP}/g" $Temp_Dir/config.yaml
-sed -i "s/CLASH_ALLOW_LAN_PLACEHOLDER/${CLASH_ALLOW_LAN}/g" $Temp_Dir/config.yaml
+sed -i "s/CLASH_HTTP_PORT_PLACEHOLDER/${CLASH_HTTP_PORT}/g" "$Temp_Dir/config.yaml"
+sed -i "s/CLASH_SOCKS_PORT_PLACEHOLDER/${CLASH_SOCKS_PORT}/g" "$Temp_Dir/config.yaml"
+sed -i "s/CLASH_REDIR_PORT_PLACEHOLDER/${CLASH_REDIR_PORT}/g" "$Temp_Dir/config.yaml"
+sed -i "s/CLASH_LISTEN_IP_PLACEHOLDER/${CLASH_LISTEN_IP}/g" "$Temp_Dir/config.yaml"
+sed -i "s/CLASH_ALLOW_LAN_PLACEHOLDER/${CLASH_ALLOW_LAN}/g" "$Temp_Dir/config.yaml"
 
 # 配置 external-controller
 if [ "$EXTERNAL_CONTROLLER_ENABLED" = "true" ]; then
-	sed -i "s/EXTERNAL_CONTROLLER_PLACEHOLDER/${EXTERNAL_CONTROLLER}/g" $Temp_Dir/config.yaml
+  sed -i "s/EXTERNAL_CONTROLLER_PLACEHOLDER/${EXTERNAL_CONTROLLER}/g" "$Temp_Dir/config.yaml"
 else
-	# 如果禁用 external-controller，则注释掉该行
-	sed -i "s/external-controller: 'EXTERNAL_CONTROLLER_PLACEHOLDER'/# external-controller: disabled/g" $Temp_Dir/config.yaml
+  # 如果禁用 external-controller，则注释掉该行
+  sed -i "s/external-controller: 'EXTERNAL_CONTROLLER_PLACEHOLDER'/# external-controller: disabled/g" "$Temp_Dir/config.yaml"
 fi
 
 apply_tun_config "$Temp_Dir/config.yaml"
 apply_mixin_config "$Temp_Dir/config.yaml" "$Server_Dir"
 
-\cp $Temp_Dir/config.yaml $Conf_Dir/
+\cp "$Temp_Dir/config.yaml" "$Conf_Dir/"
 
 # Configure Clash Dashboard
-Work_Dir=$(cd $(dirname $0); pwd)
+Work_Dir="$(cd "$(dirname "$0")" && pwd)"
 Dashboard_Dir="${Work_Dir}/dashboard/public"
+
 if [ "$EXTERNAL_CONTROLLER_ENABLED" = "true" ]; then
-	sed -ri "s@^# external-ui:.*@external-ui: ${Dashboard_Dir}@g" $Conf_Dir/config.yaml
+  sed -ri "s@^# external-ui:.*@external-ui: ${Dashboard_Dir}@g" "$Conf_Dir/config.yaml"
 fi
-sed -r -i '/^secret: /s@(secret: ).*@\1'${Secret}'@g' $Conf_Dir/config.yaml
 
-
+sed -r -i "/^secret: /s@(secret: ).*@\1${Secret}@g" "$Conf_Dir/config.yaml"
 
 ## 启动Clash服务
 echo -e '\n正在启动Clash服务...'
 Text5="服务启动成功！"
 Text6="服务启动失败！"
-Clash_Bin=$(resolve_clash_bin "$Server_Dir" "$CpuArch")
+
+Clash_Bin="$(resolve_clash_bin "$Server_Dir" "$CpuArch")"
 ReturnStatus=$?
+
 if [ $ReturnStatus -eq 0 ]; then
-	nohup "$Clash_Bin" -d "$Conf_Dir" &> "$Log_Dir/clash.log" &
-	PID=$!
-	ReturnStatus=$?
-	if [ $ReturnStatus -eq 0 ]; then
-		echo "$PID" > "$PID_FILE"
-	fi
+  nohup "$Clash_Bin" -d "$Conf_Dir" &> "$Log_Dir/clash.log" &
+  PID=$!
+  ReturnStatus=$?
+  if [ $ReturnStatus -eq 0 ]; then
+    echo "$PID" > "$PID_FILE"
+  fi
 fi
-if_success $Text5 $Text6 $ReturnStatus
+
+if_success "$Text5" "$Text6" "$ReturnStatus"
 
 # Output Dashboard access address and Secret
 echo ''
 if [ "$EXTERNAL_CONTROLLER_ENABLED" = "true" ]; then
-	echo -e "Clash Dashboard 访问地址: http://${EXTERNAL_CONTROLLER}/ui"
-	echo -e "Secret: ${Secret}"
+  echo -e "Clash Dashboard 访问地址: http://${EXTERNAL_CONTROLLER}/ui"
+  echo -e "Secret: ${Secret}"
 else
-	echo -e "External Controller (Dashboard) 已禁用"
+  echo -e "External Controller (Dashboard) 已禁用"
 fi
 echo ''
 
 # 添加环境变量 - 使用配置的端口
 Env_File="${CLASH_ENV_FILE:-}"
+
 if [ "$Env_File" = "off" ] || [ "$Env_File" = "disabled" ]; then
-	echo -e "\033[33m[WARN] 已关闭环境变量文件生成\033[0m"
+  echo -e "\033[33m[WARN] 已关闭环境变量文件生成\033[0m"
 else
-	if [ -z "$Env_File" ]; then
-		if [ -w /etc/profile.d ]; then
-			Env_File="/etc/profile.d/clash-for-linux.sh"
-		else
-			Env_File="$Temp_Dir/clash-for-linux.sh"
-		fi
-	fi
-	if [ -f /etc/profile.d/clash.sh ]; then
-		echo -e "\033[33m[WARN] 检测到旧版环境变量文件 /etc/profile.d/clash.sh，建议确认是否需要清理\033[0m"
-	fi
-	mkdir -p "$(dirname "$Env_File")"
-	cat>"$Env_File"<<EOF
+  if [ -z "$Env_File" ]; then
+    if [ -w /etc/profile.d ]; then
+      Env_File="/etc/profile.d/clash-for-linux.sh"
+    else
+      Env_File="$Temp_Dir/clash-for-linux.sh"
+    fi
+  fi
+
+  if [ -f /etc/profile.d/clash.sh ]; then
+    echo -e "\033[33m[WARN] 检测到旧版环境变量文件 /etc/profile.d/clash.sh，建议确认是否需要清理\033[0m"
+  fi
+
+  mkdir -p "$(dirname "$Env_File")"
+
+  cat >"$Env_File"<<EOF
 # 开启系统代理
 function proxy_on() {
-	export http_proxy=http://${CLASH_LISTEN_IP}:${CLASH_HTTP_PORT}
-	export https_proxy=http://${CLASH_LISTEN_IP}:${CLASH_HTTP_PORT}
-	export no_proxy=127.0.0.1,localhost
-    	export HTTP_PROXY=http://${CLASH_LISTEN_IP}:${CLASH_HTTP_PORT}
-    	export HTTPS_PROXY=http://${CLASH_LISTEN_IP}:${CLASH_HTTP_PORT}
- 	export NO_PROXY=127.0.0.1,localhost
-	echo -e "\033[32m[√] 已开启代理\033[0m"
+  export http_proxy=http://${CLASH_LISTEN_IP}:${CLASH_HTTP_PORT}
+  export https_proxy=http://${CLASH_LISTEN_IP}:${CLASH_HTTP_PORT}
+  export no_proxy=127.0.0.1,localhost
+  export HTTP_PROXY=http://${CLASH_LISTEN_IP}:${CLASH_HTTP_PORT}
+  export HTTPS_PROXY=http://${CLASH_LISTEN_IP}:${CLASH_HTTP_PORT}
+  export NO_PROXY=127.0.0.1,localhost
+  echo -e "\033[32m[√] 已开启代理\033[0m"
 }
 
 # 关闭系统代理
-function proxy_off(){
-	unset http_proxy
-	unset https_proxy
-	unset no_proxy
-  	unset HTTP_PROXY
-	unset HTTPS_PROXY
-	unset NO_PROXY
-	echo -e "\033[31m[×] 已关闭代理\033[0m"
+function proxy_off() {
+  unset http_proxy
+  unset https_proxy
+  unset no_proxy
+  unset HTTP_PROXY
+  unset HTTPS_PROXY
+  unset NO_PROXY
+  echo -e "\033[31m[×] 已关闭代理\033[0m"
 }
 EOF
 
-echo -e "请执行以下命令加载环境变量: source ${Env_File}\n"
-echo -e "请执行以下命令开启系统代理: proxy_on\n"
-echo -e "若要临时关闭系统代理，请执行: proxy_off\n"
+  echo -e "请执行以下命令加载环境变量: source ${Env_File}\n"
+  echo -e "请执行以下命令开启系统代理: proxy_on\n"
+  echo -e "若要临时关闭系统代理，请执行: proxy_off\n"
 fi
