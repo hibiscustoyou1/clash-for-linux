@@ -1,0 +1,146 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SERVICE_NAME="clash-for-linux"
+
+resolve_clash_home() {
+	local candidates
+	if [ -n "${CLASH_HOME:-}" ] && [ -d "$CLASH_HOME" ]; then
+		echo "$CLASH_HOME"
+		return 0
+	fi
+	if [ -f "/etc/default/${SERVICE_NAME}" ]; then
+		candidates=$(awk -F= '/^CLASH_HOME=/{print $2}' "/etc/default/${SERVICE_NAME}" | tr -d '"')
+		if [ -n "$candidates" ] && [ -d "$candidates" ]; then
+			echo "$candidates"
+			return 0
+		fi
+	fi
+	if [ -f "$SCRIPT_DIR/.env" ]; then
+		echo "$SCRIPT_DIR"
+		return 0
+	fi
+	if [ -f "/opt/clash-for-linux/.env" ]; then
+		echo "/opt/clash-for-linux"
+		return 0
+	fi
+	echo "$SCRIPT_DIR"
+}
+
+CLASH_HOME=$(resolve_clash_home)
+ENV_FILE="$CLASH_HOME/.env"
+PID_FILE="$CLASH_HOME/temp/clash.pid"
+
+use_systemd() {
+	command -v systemctl >/dev/null 2>&1
+}
+
+action_with_systemd() {
+	local action="$1"
+	if use_systemd; then
+		if systemctl "$action" "${SERVICE_NAME}.service" >/dev/null 2>&1; then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+print_usage() {
+	cat <<USAGE
+Usage: clashctl <command> [args]
+
+Commands:
+  start                 Start Clash service
+  stop                  Stop Clash service
+  restart               Restart Clash service
+  status                Show Clash service status
+  update                Refresh subscription config
+  set-url <url>          Update CLASH_URL in .env
+
+Environment:
+  CLASH_HOME             Override Clash installation directory
+USAGE
+}
+
+set_url() {
+	local url="$1"
+	if [ -z "$url" ]; then
+		echo "[ERROR] 请提供订阅地址" >&2
+		exit 1
+	fi
+	if [ ! -f "$ENV_FILE" ]; then
+		echo "[ERROR] 未找到 .env 文件: $ENV_FILE" >&2
+		exit 1
+	fi
+	local escaped
+	escaped=$(printf "%s" "$url" | sed "s/'/'\"'\"'/g")
+	if grep -q '^export CLASH_URL=' "$ENV_FILE"; then
+		sed -i "s@^export CLASH_URL=.*@export CLASH_URL='${escaped}'@" "$ENV_FILE"
+	else
+		echo "export CLASH_URL='${escaped}'" >> "$ENV_FILE"
+	fi
+	echo "[OK] 已更新 CLASH_URL"
+}
+
+status_fallback() {
+	if [ -f "$PID_FILE" ]; then
+		local pid
+		pid=$(cat "$PID_FILE")
+		if [ -n "$pid" ] && kill -0 "$pid" >/dev/null 2>&1; then
+			echo "[OK] Clash 进程运行中 (PID: $pid)"
+			return 0
+		fi
+	fi
+	if pgrep -f "clash-linux-" >/dev/null 2>&1; then
+		echo "[OK] Clash 进程运行中"
+		return 0
+	fi
+	echo "[WARN] 未检测到 Clash 进程"
+	return 1
+}
+
+run_script() {
+	local script="$1"
+	if [ ! -x "$CLASH_HOME/$script" ]; then
+		echo "[ERROR] 未找到脚本: $CLASH_HOME/$script" >&2
+		exit 1
+	fi
+	( cd "$CLASH_HOME" && bash "$CLASH_HOME/$script" )
+}
+
+command=${1:-}
+case "$command" in
+	start)
+		action_with_systemd start || run_script start.sh
+		;;
+	stop)
+		action_with_systemd stop || run_script shutdown.sh
+		;;
+	restart)
+		action_with_systemd restart || run_script restart.sh
+		;;
+	status)
+		if use_systemd; then
+			if systemctl status "${SERVICE_NAME}.service" --no-pager; then
+				exit 0
+			fi
+		fi
+		status_fallback
+		;;
+	update)
+		run_script update.sh
+		;;
+	set-url)
+		set_url "${2:-}"
+		;;
+	-h|--help|help|'')
+		print_usage
+		;;
+	*)
+		echo "[ERROR] 未知命令: $command" >&2
+		print_usage
+		exit 1
+		;;
+esac

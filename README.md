@@ -45,6 +45,7 @@ $ vim .env
 
 > **注意：** `.env` 文件中的变量 `CLASH_SECRET` 为自定义 Clash Secret，值为空时，脚本将自动生成随机字符串。
 > 如需使用其它架构，请将对应 Clash 二进制放入 `bin/` 并在 `.env` 中设置 `CLASH_BIN`，或命名为 `clash-linux-<arch>`（如 `clash-linux-riscv64`）。
+> 端口支持设置为 `auto`，脚本会自动检测冲突并随机分配可用端口。
 
 <br>
 
@@ -86,6 +87,26 @@ Secret：xxxxxxxxxxxxx
 ```bash
 $ source /etc/profile.d/clash-for-linux.sh
 $ proxy_on
+```
+
+<br>
+
+## clashctl 命令
+
+统一管理入口，支持启动/停止/重启/状态/更新/修改订阅：
+
+```bash
+$ sudo ./clashctl status
+$ sudo ./clashctl start
+$ sudo ./clashctl restart
+$ sudo ./clashctl update
+$ sudo ./clashctl set-url "https://example.com/your-subscribe"
+```
+
+安装脚本会将 `clashctl` 安装到 `/usr/local/bin/clashctl`，安装后可直接使用：
+
+```bash
+$ sudo clashctl status
 ```
 
 <br>

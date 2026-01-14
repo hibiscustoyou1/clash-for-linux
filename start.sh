@@ -43,6 +43,12 @@ EXTERNAL_CONTROLLER_ENABLED=${EXTERNAL_CONTROLLER_ENABLED:-true}
 EXTERNAL_CONTROLLER=${EXTERNAL_CONTROLLER:-127.0.0.1:9090}
 ALLOW_INSECURE_TLS=${ALLOW_INSECURE_TLS:-false}
 
+source "$Server_Dir/scripts/port_utils.sh"
+CLASH_HTTP_PORT=$(resolve_port_value "HTTP" "$CLASH_HTTP_PORT")
+CLASH_SOCKS_PORT=$(resolve_port_value "SOCKS" "$CLASH_SOCKS_PORT")
+CLASH_REDIR_PORT=$(resolve_port_value "REDIR" "$CLASH_REDIR_PORT")
+EXTERNAL_CONTROLLER=$(resolve_host_port "External Controller" "$EXTERNAL_CONTROLLER" "0.0.0.0")
+
 
 
 #################### 函数定义 ####################

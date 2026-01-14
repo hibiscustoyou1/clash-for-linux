@@ -30,10 +30,12 @@ fi
 chmod +x "$Install_Dir"/*.sh 2>/dev/null || true
 chmod +x "$Install_Dir"/scripts/* 2>/dev/null || true
 chmod +x "$Install_Dir"/bin/* 2>/dev/null || true
+chmod +x "$Install_Dir"/clashctl 2>/dev/null || true
 
 source "$Install_Dir/.env"
 source "$Install_Dir/scripts/get_cpu_arch.sh"
 source "$Install_Dir/scripts/resolve_clash.sh"
+source "$Install_Dir/scripts/port_utils.sh"
 
 if [[ -z "${CpuArch:-}" ]]; then
 	echo -e "\033[31m[ERROR] 无法识别 CPU 架构\033[0m"
@@ -51,22 +53,11 @@ parse_port() {
 	echo "$raw"
 }
 
-is_port_in_use() {
-	local port="$1"
-	if command -v ss >/dev/null 2>&1; then
-		ss -lnt | awk '{print $4}' | grep -E "(:|\.)${port}$" >/dev/null 2>&1
-	elif command -v netstat >/dev/null 2>&1; then
-		netstat -lnt | awk '{print $4}' | grep -E "(:|\.)${port}$" >/dev/null 2>&1
-	elif command -v lsof >/dev/null 2>&1; then
-		lsof -iTCP -sTCP:LISTEN -P -n | awk '{print $9}' | grep -E "(:|\.)${port}$" >/dev/null 2>&1
-	else
-		echo -e "\033[33m[WARN] 未找到端口检测工具，跳过端口冲突检测\033[0m"
-		return 1
-	fi
-}
-
 Port_Conflicts=()
 for port in "$CLASH_HTTP_PORT" "$CLASH_SOCKS_PORT" "$CLASH_REDIR_PORT" "$(parse_port "$EXTERNAL_CONTROLLER")"; do
+	if [ "$port" = "auto" ] || [ -z "$port" ]; then
+		continue
+	fi
 	if [[ "$port" =~ ^[0-9]+$ ]]; then
 		if is_port_in_use "$port"; then
 			Port_Conflicts+=("$port")
@@ -75,9 +66,7 @@ for port in "$CLASH_HTTP_PORT" "$CLASH_SOCKS_PORT" "$CLASH_REDIR_PORT" "$(parse_
 done
 
 if [ "${#Port_Conflicts[@]}" -ne 0 ]; then
-	echo -e "\033[31m[ERROR] 检测到端口冲突: ${Port_Conflicts[*]}\033[0m"
-	echo -e "请修改 .env 中的端口设置后重新安装。"
-	exit 1
+	echo -e "\033[33m[WARN] 检测到端口冲突: ${Port_Conflicts[*]}，运行时将自动分配可用端口\033[0m"
 fi
 
 if ! getent group "$Service_Group" >/dev/null 2>&1; then
@@ -106,6 +95,10 @@ if command -v systemctl >/dev/null 2>&1; then
 	fi
 else
 	echo -e "\033[33m[WARN] 未检测到 systemd，已跳过服务单元生成\033[0m"
+fi
+
+if [ -f "$Install_Dir/clashctl" ]; then
+	install -m 0755 "$Install_Dir/clashctl" /usr/local/bin/clashctl
 fi
 
 echo -e "\033[32m[OK] Clash for Linux 已安装至: ${Install_Dir}\033[0m"

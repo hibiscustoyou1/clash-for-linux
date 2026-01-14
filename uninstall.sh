@@ -27,10 +27,13 @@ if [ -f "/etc/profile.d/clash-for-linux.sh" ]; then
 	rm -f "/etc/profile.d/clash-for-linux.sh"
 fi
 
+if [ -f "/usr/local/bin/clashctl" ]; then
+	rm -f "/usr/local/bin/clashctl"
+fi
+
 if [ -d "$Install_Dir" ]; then
 	rm -rf "$Install_Dir"
 	echo -e "\033[32m[OK] 已移除安装目录: ${Install_Dir}\033[0m"
 else
 	echo -e "\033[33m[WARN] 未找到安装目录: ${Install_Dir}\033[0m"
 fi
-
