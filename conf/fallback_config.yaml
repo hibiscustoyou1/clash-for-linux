@@ -4,21 +4,13 @@ bind-address: '*'
 mode: rule
 log-level: info
 ipv6: true
+udp: true
+
 external-controller: 127.0.0.1:9090
-secret: 'SECRET_PLACEHOLDER'
-external-ui: /opt/clash-for-linux/ui
-dns:
-  enable: true
-  listen: 127.0.0.1:1053
-  enhanced-mode: fake-ip
-  nameserver:
-    - 223.5.5.5
-    - 119.29.29.29
+secret: "SECRET_PLACEHOLDER"
+
 proxies: []
-proxy-groups:
-  - name: "DIRECT"
-    type: select
-    proxies:
-      - DIRECT
+proxy-groups: []
+
 rules:
   - MATCH,DIRECT
