@@ -257,6 +257,58 @@ wait_secret_ready() {
   return 1
 }
 
+# 计算字符串可视宽度：中文大概率按 2 宽处理（简单够用版）
+# 注：终端宽度/字体不统一时，中文宽度估算永远只能“近似”
+vis_width() {
+  python3 - <<'PY' "$1"
+import sys
+s=sys.argv[1]
+w=0
+for ch in s:
+  # East Asian Wide/FullWidth 近似当 2
+  w += 2 if ord(ch) >= 0x2E80 else 1
+print(w)
+PY
+}
+
+pad_right() { # pad_right "text" width
+  local s="$1" w="$2"
+  local cur
+  cur="$(vis_width "$s")"
+  local pad=$(( w - cur ))
+  (( pad < 0 )) && pad=0
+  printf "%s%*s" "$s" "$pad" ""
+}
+
+box_title() { # box_title "标题" width
+  local title="$1" width="$2"
+  local inner=$((width-2))
+  printf "┌%s┐\n" "$(printf '─%.0s' $(seq 1 $inner))"
+  # 标题居中（近似）
+  local t=" $title "
+  local tw; tw="$(vis_width "$t")"
+  local left=$(( (inner - tw)/2 )); ((left<0)) && left=0
+  local right=$(( inner - tw - left )); ((right<0)) && right=0
+  printf "│%*s%s%*s│\n" "$left" "" "$t" "$right" ""
+  printf "├%s┤\n" "$(printf '─%.0s' $(seq 1 $inner))"
+}
+
+box_row() { # box_row "key" "value" width keyw
+  local k="$1" v="$2" width="$3" keyw="$4"
+  local inner=$((width-2))
+  # 形如：│ key: value                      │
+  local left="$(pad_right "$k" "$keyw")"
+  local line=" ${left}  ${v}"
+  local lw; lw="$(vis_width "$line")"
+  local pad=$(( inner - lw )); ((pad<0)) && pad=0
+  printf "│%s%*s│\n" "$line" "$pad" ""
+}
+
+box_end() { # box_end width
+  local width="$1" inner=$((width-2))
+  printf "└%s┘\n" "$(printf '─%.0s' $(seq 1 $inner))"
+}
+
 # 从 config.yaml 提取 secret（强韧：支持缩进/引号/CRLF/尾空格）
 read_secret_from_config() {
   local conf_file="$1"
@@ -319,6 +371,7 @@ fi
 # =========================
 # 友好收尾输出（闭环）
 # =========================
+
 section "安装完成"
 ok "Clash for Linux 已安装至: $(path "${Install_Dir}")"
 
@@ -348,7 +401,13 @@ fi
 # Dashboard / Secret
 # =========================
 section "控制面板"
-
+width=54
+box_title "Web 控制面板" "$width"
+box_row "注意放行端口" "9090" "$width" 12
+box_row "内网" "$(url "http://192.168.0.191:9090/ui")" "$width" 12
+box_row "公网" "$(url "http://<your-ip>:9090/ui")" "$width" 12
+box_row "公共" "$(url "https://board.example.com")" "$width" 12
+box_end "$width"
 api_port="$(parse_port "${EXTERNAL_CONTROLLER}")"
 api_host="${EXTERNAL_CONTROLLER%:*}"
 
@@ -390,7 +449,7 @@ fi
 # =========================
 # 下一步
 # =========================
-section "下一步（可选）"
+section "下一步开启代理（可选）"
 log "  $(cmd "source /etc/profile.d/clash-for-linux.sh")"
 log "  $(cmd "proxy_on")"
 
