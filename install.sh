@@ -174,6 +174,45 @@ if ! resolve_clash_bin "$Install_Dir" "$CpuArch" >/dev/null 2>&1; then
 fi
 
 # =========================
+# fonction 工具函数区
+# =========================
+# 等待 config.yaml 出现并写入 secret（默认最多等 6 秒）
+wait_secret_ready() {
+  local conf_file="$1"
+  local timeout_sec="${2:-6}"
+
+  local end=$((SECONDS + timeout_sec))
+  while [ "$SECONDS" -lt "$end" ]; do
+    if [ -s "$conf_file" ] && grep -qE '^[[:space:]]*secret:' "$conf_file"; then
+      return 0
+    fi
+    sleep 0.2
+  done
+  return 1
+}
+
+# 从 config.yaml 提取 secret（强韧：支持缩进/引号/CRLF/尾空格）
+read_secret_from_config() {
+  local conf_file="$1"
+  [ -f "$conf_file" ] || return 1
+
+  # 1) 找到 secret 行 -> 2) 去掉 key 和空格 -> 3) 去掉首尾引号 -> 4) 去掉 CR
+  local s
+  s="$(
+    sed -nE 's/^[[:space:]]*secret:[[:space:]]*//p' "$conf_file" \
+      | head -n 1 \
+      | sed -E 's/^[[:space:]]*"(.*)"[[:space:]]*$/\1/; s/^[[:space:]]*'\''(.*)'\''[[:space:]]*$/\1/' \
+      | tr -d '\r'
+  )"
+
+  # 去掉纯空格
+  s="$(printf '%s' "$s" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+
+  [ -n "$s" ] || return 1
+  printf '%s' "$s"
+}
+
+# =========================
 # systemd 安装与启动
 # =========================
 Service_Enabled="unknown"
@@ -246,22 +285,21 @@ CONF_FILE="$CONF_DIR/config.yaml"
 
 # 读取 secret（如果 clash 还没生成 config，就先不显示）
 SECRET_VAL=""
-if [ -f "$CONF_FILE" ]; then
-  SECRET_VAL="$(awk -F': *' '/^[[:space:]]*secret:/{print $2; exit}' "$CONF_FILE" | tr -d '"' | tr -d "'" )"
+if wait_secret_ready "$CONF_FILE" 6; then
+  SECRET_VAL="$(read_secret_from_config "$CONF_FILE" || true)"
 fi
 
 if [ -n "$SECRET_VAL" ]; then
-  # 脱敏显示：前4后4
   MASKED="${SECRET_VAL:0:4}****${SECRET_VAL: -4}"
   echo ""
-  echo -e "🌐 Dashboard：http://${api_host}:${api_port}/ui/"
+  echo -e "🌐 Dashboard：http://${api_host}:${api_port}/ui"
   echo "🔐 Secret：${MASKED}"
-  echo "   查看完整 Secret：sudo awk -F': *' '/^[[:space:]]*secret:/{print \$2; exit}' $CONF_FILE"
+  echo "   查看完整 Secret：sudo sed -nE 's/^[[:space:]]*secret:[[:space:]]*//p' $CONF_FILE | head -n 1"
 else
   echo ""
-  echo -e "🌐 Dashboard：http://${api_host}:${api_port}/ui/"
-  echo "🔐 Secret：未配置（当前为无鉴权模式，仅限本机访问），可用以下命令查看："
-  echo "   sudo awk -F': *' '/^secret:/{print \$2; exit}' $CONF_FILE"
+  echo -e "🌐 Dashboard：http://${api_host}:${api_port}/ui"
+  echo "🔐 Secret：启动中暂未读到（稍后再试）"
+  echo "   稍后查看：sudo sed -nE 's/^[[:space:]]*secret:[[:space:]]*//p' $CONF_FILE | head -n 1"
 fi
 
 echo
