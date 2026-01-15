@@ -56,12 +56,13 @@ if is_running; then
   exit 0
 fi
 
-# 将 CLASH_URL 变量的值赋给 URL 变量，并检查 CLASH_URL 是否为空
-# systemd 模式：允许为空（用兜底配置启动）
-if [ "$SYSTEMD_MODE" = "true" ]; then
-  URL="${CLASH_URL:-}"
-else
-  URL="${CLASH_URL:?Error: CLASH_URL variable is not set or empty}"
+# 统一订阅变量
+URL="${CLASH_URL:-}"
+
+# 只有在“需要在线更新订阅”的模式下才强制要求 URL
+if [ -z "$URL" ] && [ "${SYSTEMD_MODE:-false}" != "true" ]; then
+  echo "[ERR] CLASH_URL 为空（未配置订阅地址）"
+  exit 2
 fi
 
 # 获取 CLASH_SECRET 值：优先 .env；其次读取旧 config；占位符视为无效；最后生成随机值
