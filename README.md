@@ -84,6 +84,12 @@ sudo bash install.sh
 sudo bash -c 'echo "CLASH_URL=<订阅地址>" > /opt/clash-for-linux/.env'
 ```
 
+配置完成后，**重启服务使配置生效**：
+
+```
+sudo systemctl restart clash-for-linux.service
+```
+
 说明：
 
 - `CLASH_SECRET` 为空时将自动生成
