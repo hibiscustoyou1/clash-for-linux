@@ -37,7 +37,7 @@ SYSTEMD_MODE="${SYSTEMD_MODE:-false}"
 
 # root-only 强约束：不是 root 直接退出
 if [ "$(id -u)" -ne 0 ]; then
-  echo "[ERR] root-only moL="$(printf '%s' "$URL" | tr -d '\rde: please run as root" >&2
+  echo "[ERR] root-only mode: please run as root" >&2
   exit 2
 fi
 
