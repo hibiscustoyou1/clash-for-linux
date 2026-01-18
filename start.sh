@@ -165,51 +165,26 @@ upsert_yaml_kv() {
 }
 
 ensure_ui_links() {
-  # UI 源目录：仓库内置 dashboard
   local ui_src="${UI_SRC_DIR:-$Server_Dir/dashboard/public}"
-
-  # UI 目标目录：必须落在 SAFE_PATHS（当前内核允许 /opt/clash-for-linux/conf）
-  local ui_dst="${EXTERNAL_UI_DIR:-$Conf_Dir/external-ui}"
-
   mkdir -p "$Conf_Dir" 2>/dev/null || true
-
-  # 目标目录必须是“真实目录”，不要用软链（软链可能跳出 conf 被 SAFE_PATH 拦）
-  mkdir -p "$ui_dst" 2>/dev/null || true
-
   if [ -d "$ui_src" ]; then
-    # 复制/同步 UI 文件到 conf 子目录
-    # rsync 不一定存在，优先 rsync，其次 cp -a
-    if command -v rsync >/dev/null 2>&1; then
-      rsync -a --delete "$ui_src"/ "$ui_dst"/ 2>/dev/null || true
-    else
-      rm -rf "$ui_dst"/* 2>/dev/null || true
-      cp -a "$ui_src"/. "$ui_dst"/ 2>/dev/null || true
-    fi
+    ln -sfn "$ui_src" "$Conf_Dir/ui" 2>/dev/null || true
   fi
 }
 
 force_write_controller_and_ui() {
   local file="$1"
   local controller="${EXTERNAL_CONTROLLER:-127.0.0.1:9090}"
-  local MIHOMO_UI_DIR="/opt/clash-for-linux/.config/mihomo/ui"
 
   [ -n "$file" ] || return 1
 
-  # 1) external-controller
+  # external-controller
   upsert_yaml_kv "$file" "external-controller" "$controller" || true
 
-  # 2) external-ui：写 mihomo SAFE_PATH
-  mkdir -p "$MIHOMO_UI_DIR" 2>/dev/null || true
-
-  # 如果 SAFE_PATH 下没有 index.html，尝试从 conf/ui 同步一次
-  if [ ! -f "$MIHOMO_UI_DIR/index.html" ] && [ -d "$Conf_Dir/ui" ]; then
-    rm -rf "$MIHOMO_UI_DIR"/* 2>/dev/null || true
-    cp -a "$Conf_Dir/ui/." "$MIHOMO_UI_DIR/" 2>/dev/null || true
-  fi
-
-  # 只有真的有 UI 文件才写 external-ui（否则写了也白屏）
-  if [ -f "$MIHOMO_UI_DIR/index.html" ]; then
-    upsert_yaml_kv "$file" "external-ui" "$MIHOMO_UI_DIR" || true
+  # external-ui: fixed to Conf_Dir/ui
+  ensure_ui_links
+  if [ -e "$Conf_Dir/ui" ]; then
+    upsert_yaml_kv "$file" "external-ui" "$Conf_Dir/ui" || true
   fi
 }
 
