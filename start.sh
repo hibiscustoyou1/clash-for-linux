@@ -505,6 +505,19 @@ if [ "$SKIP_CONFIG_REBUILD" != "true" ]; then
     # 4) 强制注入 secret
     force_write_secret "$CONFIG_FILE" || true
 
+    # Optional: Fix test URLs to HTTPS for reliability (safe, narrow scope)
+    if [ "${FIX_TEST_URL_HTTPS:-true}" = "true" ] && [ -s "$CONFIG_FILE" ]; then
+      # 1) proxy-groups url-test / fallback url
+      sed -i -E \
+        "s#(url:[[:space:]]*['\"])http://#\1https://#g" \
+        "$CONFIG_FILE" 2>/dev/null || true
+
+      # 2) cfw-latency-url (used by some dashboards / generators)
+      sed -i -E \
+        "s#(cfw-latency-url:[[:space:]]*['\"])http://#\1https://#g" \
+        "$CONFIG_FILE" 2>/dev/null || true
+    fi
+
     # 5) 自检：失败则回退到旧配置
     BIN="${Server_Dir}/bin/clash-linux-amd64"
     NEW_CFG="$CONFIG_FILE"
@@ -523,19 +536,6 @@ if [ "$SKIP_CONFIG_REBUILD" != "true" ]; then
     fi
 
     echo "[INFO] Runtime config generated: $CONFIG_FILE (size=$(wc -c <"$CONFIG_FILE" 2>/dev/null || echo 0))"
-
-    # Optional: Fix test URLs to HTTPS for reliability (safe, narrow scope)
-    if [ "${FIX_TEST_URL_HTTPS:-true}" = "true" ] && [ -s "$CONFIG_FILE" ]; then
-      # 1) proxy-groups url-test / fallback url
-      sed -i -E \
-        "s#(url:[[:space:]]*['\"])http://#\1https://#g" \
-        "$CONFIG_FILE" 2>/dev/null || true
-
-      # 2) cfw-latency-url (used by some dashboards / generators)
-      sed -i -E \
-        "s#(cfw-latency-url:[[:space:]]*['\"])http://#\1https://#g" \
-        "$CONFIG_FILE" 2>/dev/null || true
-    fi
   else
     echo "[WARN] Download did not produce clash.yaml (rc=$ReturnStatus), skip runtime config generation" >&2
   fi
