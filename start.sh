@@ -507,15 +507,14 @@ if [ "$SKIP_CONFIG_REBUILD" != "true" ]; then
 
     # Optional: Fix test URLs to HTTPS for reliability (safe, narrow scope)
     if [ "${FIX_TEST_URL_HTTPS:-true}" = "true" ] && [ -s "$CONFIG_FILE" ]; then
-      # 1) proxy-groups url-test / fallback url
-      sed -i -E \
-        "s#(url:[[:space:]]*['\"])http://#\1https://#g" \
-        "$CONFIG_FILE" 2>/dev/null || true
+      # 1) proxy-groups: url-test / fallback url
+      sed -i -E "s#(url:[[:space:]]*['\"])http://#\1https://#g" "$CONFIG_FILE" 2>/dev/null || true
 
-      # 2) cfw-latency-url (used by some dashboards / generators)
-      sed -i -E \
-        "s#(cfw-latency-url:[[:space:]]*['\"])http://#\1https://#g" \
-        "$CONFIG_FILE" 2>/dev/null || true
+      # 2) cfw-latency-url (some dashboards)
+      sed -i -E "s#(cfw-latency-url:[[:space:]]*['\"])http://#\1https://#g" "$CONFIG_FILE" 2>/dev/null || true
+
+      # 3) proxy-providers health-check url (mihomo warns about this)
+      sed -i -E "s#(health-check:[[:space:]]*\n[[:space:]]*url:[[:space:]]*['\"])http://#\1https://#g" "$CONFIG_FILE" 2>/dev/null || true
     fi
 
     # 5) 自检：失败则回退到旧配置
